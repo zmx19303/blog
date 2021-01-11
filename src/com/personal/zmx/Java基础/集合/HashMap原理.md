@@ -170,7 +170,25 @@ private int tableSizeFor(int cap) {
 
 ​		那么问题来了，`tableSizeFor(int cap)`函数返回的是扩容的临界值`threshold`，但是这个临界值很可能就出现比数组容量大的情况，但是上面的注释又说临界值=容量*负载因子，有点自相矛盾，所以，为啥要这么设计呢？这么设计有啥好处呢？或者是为了防止什么情况呢？先留下这个问题。
 
-​		最后一个构造函数先不看，根据已经看完源码的三个构造函数我们来总结下：
+​		然后看最后一个构造函数，源码如下：
+
+```java
+/**
+ * Constructs a new <tt>HashMap</tt> with the same mappings as the
+ * specified <tt>Map</tt>.  The <tt>HashMap</tt> is created with
+ * default load factor (0.75) and an initial capacity sufficient to
+ * hold the mappings in the specified <tt>Map</tt>.
+ *
+ * @param   m the map whose mappings are to be placed in this map
+ * @throws  NullPointerException if the specified map is null
+ */
+public HashMap(Map<? extends K, ? extends V> m) {
+    this.loadFactor = DEFAULT_LOAD_FACTOR;
+    putMapEntries(m, false);
+}
+```
+
+先看注释，构造一个新的<tt>HashMap</tt>，与指定的`Map`有相同的映射。<tt>HashMap</tt>使用默认负载系数(0.75)和初始容量足以容纳指定的<tt>Map</tt>的映射。从源码分析，这个构造函数和无参构造函数具有相同的结构，之后进行了一个put操作。所以，我们可以认为这个构造函数就是和无参构造函数相同。
 
 1. 在HashMap初始化的过程中，只创建了一个类，没有创建数组、链表和红黑树；
 2. 在HashMap初始化的过程中，最多只有两个变量发生了变化：负载因子`loadFactor`和临界值`threshold`;
@@ -194,7 +212,7 @@ private int tableSizeFor(int cap) {
 - `void putAll(Map<? extends K, ? extends V> m)`；
 - `V putIfAbsent(K key, V value)`；
 
-其中，putAll不做研究，我们需要看的就是`V put(K key, V value)`和`V putIfAbsent(K key, V value)`这两个方法。先看源码：
+  其中，putAll不做研究，我们需要看的就是`V put(K key, V value)`和`V putIfAbsent(K key, V value)`这两个方法。先看源码：
 
 ```java
 /**
@@ -214,9 +232,113 @@ public V put(K key, V value) {
 }
 ```
 
-先看注释：将指定的值与此映射中的指定键关联。如果该映射先前包含了该键的映射，则旧值将被替换。
+​		先看注释：将指定的值与此映射中的指定键关联。如果该映射先前包含了该键的映射，则旧值将被替换。返回值的注释：前一个值与key相关联，如果没有key的映射，则为null。(返回null也可以表明当前map以前关联这个key的就是null)。综合注释，关于当前函数，可以表明的是，如果key重复，返回的就是以前存放在map中的值；如果不重复，返回的就是null；而在返回null的时候，也可能是key在map中存放的就是null。也就是说，HashMap的value可以为null。
 
-关于返回值的注释：
+​		再看函数`hash(key)`，源码如下：
+
+```java
+/**
+ * Computes key.hashCode() and spreads (XORs) higher bits of hash
+ * to lower.  Because the table uses power-of-two masking, sets of
+ * hashes that vary only in bits above the current mask will
+ * always collide. (Among known examples are sets of Float keys
+ * holding consecutive whole numbers in small tables.)  So we
+ * apply a transform that spreads the impact of higher bits
+ * downward. There is a tradeoff between speed, utility, and
+ * quality of bit-spreading. Because many common sets of hashes
+ * are already reasonably distributed (so don't benefit from
+ * spreading), and because we use trees to handle large sets of
+ * collisions in bins, we just XOR some shifted bits in the
+ * cheapest possible way to reduce systematic lossage, as well as
+ * to incorporate impact of the highest bits that would otherwise
+ * never be used in index calculations because of table bounds.
+ */
+static final int hash(Object key) {
+    int h;
+    return (key == null) ? 0 : (h = key.hashCode()) ^ (h >>> 16);
+}
+```
+
+​		直接看源码，如果key为null，就返回0；否则，调用key的hashCode函数得到值h，用h和h无符号右移后的数做异或运算，并返回结果。具体细节，为啥是右移16位？这个需要深入研究，在此主要研究的不是这个，就不做深入讨论。
+
+​		然后再看`V putIfAbsent(K key, V value)`函数的源码，如下：
+
+```java 
+/**
+ * If the specified key is not already associated with a value (or is mapped
+ * to {@code null}) associates it with the given value and returns
+ * {@code null}, else returns the current value.
+ * @since 1.8
+ */
+@Override
+public V putIfAbsent(K key, V value) {
+    return putVal(hash(key), key, value, true, true);
+}
+```
+
+​		当前方法的注释太长，就只截取了一部分，只截取了一部分，这部分的意思就是：如果指定的键还没有与某个值相关联(或者被映射到null)，则将其与给定的值相关联并返回null，否则返回当前值。这个方法是1.8之后的新方法。
+
+​		可以看到，这个方法调用的也是`putVal`函数，所以，接下来重点讲解这个方法。源码如下：
+
+```java
+/**
+ * Implements Map.put and related methods
+ *
+ * @param hash hash for key
+ * @param key the key
+ * @param value the value to put
+ * @param onlyIfAbsent if true, don't change existing value
+ * @param evict if false, the table is in creation mode.
+ * @return previous value, or null if none
+ */
+final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
+               boolean evict) {
+    Node<K,V>[] tab; Node<K,V> p; int n, i;
+    if ((tab = table) == null || (n = tab.length) == 0)
+        n = (tab = resize()).length;
+    if ((p = tab[i = (n - 1) & hash]) == null)
+        tab[i] = newNode(hash, key, value, null);
+    else {
+        Node<K,V> e; K k;
+        if (p.hash == hash &&
+            ((k = p.key) == key || (key != null && key.equals(k))))
+            e = p;
+        else if (p instanceof TreeNode)
+            e = ((TreeNode<K,V>)p).putTreeVal(this, tab, hash, key, value);
+        else {
+            for (int binCount = 0; ; ++binCount) {
+                if ((e = p.next) == null) {
+                    p.next = newNode(hash, key, value, null);
+                    if (binCount >= TREEIFY_THRESHOLD - 1) // -1 for 1st
+                        treeifyBin(tab, hash);
+                    break;
+                }
+                if (e.hash == hash &&
+                    ((k = e.key) == key || (key != null && key.equals(k))))
+                    break;
+                p = e;
+            }
+        }
+        if (e != null) { // existing mapping for key
+            V oldValue = e.value;
+            if (!onlyIfAbsent || oldValue == null)
+                e.value = value;
+            afterNodeAccess(e);
+            return oldValue;
+        }
+    }
+    ++modCount;
+    if (++size > threshold)
+        resize();
+    afterNodeInsertion(evict);
+    return null;
+}
+```
+
+​		先看注释：实现了Map.put()方法及相关方法。没啥重点，再看下参数注释：
+
+- `boolean onlyIfAbsent`：if true, don't change existing value.如果为true，不改变已经存在的值。
+- `boolean evict` ： if false, the table is in creation mode.如果为false，hash表处于创建模式。
 
 
 
