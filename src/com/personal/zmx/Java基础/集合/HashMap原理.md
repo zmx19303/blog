@@ -340,6 +340,125 @@ final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
 - `boolean onlyIfAbsent`：if true, don't change existing value.如果为true，不改变已经存在的值。
 - `boolean evict` ： if false, the table is in creation mode.如果为false，hash表处于创建模式。
 
+先看第一部分代码
+
+```java
+Node<K,V>[] tab; Node<K,V> p; int n, i;
+if ((tab = table) == null || (n = tab.length) == 0)
+    n = (tab = resize()).length;
+```
+
+代码做了以下几件事：
+
+1. 定义了一系列的变量；从这儿可以看出，tab是HashMap的数组,n是数组的长度，其余的变量暂时不知道作用；
+2. 用全局变量给局部变量赋值；`table`赋给了`tab`，`n`为`table`的长度；
+3. 如果全局变量`table`为`null`，或者`table`的长度为0，则进行了扩容，并把扩容后的长度赋值给了`n`;
+
+我们再来看函数`resize()`，源码如下：
+
+```java
+/**
+ * Initializes or doubles table size.  If null, allocates in
+ * accord with initial capacity target held in field threshold.
+ * Otherwise, because we are using power-of-two expansion, the
+ * elements from each bin must either stay at same index, or move
+ * with a power of two offset in the new table.
+ * 翻译：初始化或者翻倍表的大小。如果表为null,按照字段threshold中保留的初始容量进行分配。否则，由于使用2的幂次方进行扩容，
+ * 容器的中每个元素必须保持同样的索引，或者在新的表中以2的偏移量进行移动。
+ * 
+ * @return the table
+ */
+final Node<K,V>[] resize() {
+    //旧的数组
+    Node<K,V>[] oldTab = table;
+    //旧的数组长度
+    int oldCap = (oldTab == null) ? 0 : oldTab.length;
+    //旧的阈值
+    int oldThr = threshold;
+    int newCap, newThr = 0;
+    //旧数组长度大于0
+    if (oldCap > 0) {
+        //旧数组长度大于最大数组长度,阈值去Integer的最大值，并返回当前数组；
+        if (oldCap >= MAXIMUM_CAPACITY) {
+            threshold = Integer.MAX_VALUE;
+            return oldTab;
+        }
+        //旧数组长度乘以2之后小于最大数组长度且旧数组大于初始化长度，新的阈值乘以2
+        else if ((newCap = oldCap << 1) < MAXIMUM_CAPACITY &&
+                 oldCap >= DEFAULT_INITIAL_CAPACITY)
+            newThr = oldThr << 1; // double threshold
+    }
+    //如果旧的阈值大于0，则新的数组长度等于旧的阈值
+    else if (oldThr > 0) // initial capacity was placed in threshold
+        newCap = oldThr;
+    //其余情况，新的数组长度和阈值取默认值
+    else {               // zero initial threshold signifies using defaults
+        newCap = DEFAULT_INITIAL_CAPACITY;
+        newThr = (int)(DEFAULT_LOAD_FACTOR * DEFAULT_INITIAL_CAPACITY);
+    }
+    //如果新的阈值等于0时，ft=新数组长度*负载因子，如果新数组长度小于最大数组长度且ft小于最大容量，取ft；否则，取Integer最大值
+    if (newThr == 0) {
+        float ft = (float)newCap * loadFactor;
+        newThr = (newCap < MAXIMUM_CAPACITY && ft < (float)MAXIMUM_CAPACITY ?
+                  (int)ft : Integer.MAX_VALUE);
+    }
+    //把新阈值赋给全局阈值，按照新数组长度创建新数组，并把数组赋值给全局数组变量；
+    threshold = newThr;
+    @SuppressWarnings({"rawtypes","unchecked"})
+        Node<K,V>[] newTab = (Node<K,V>[])new Node[newCap];
+    table = newTab;
+    //如果旧数组不为null，进行数据复制
+    if (oldTab != null) {
+        for (int j = 0; j < oldCap; ++j) {
+            Node<K,V> e;
+            if ((e = oldTab[j]) != null) {
+                //释放旧数组空间
+                oldTab[j] = null;
+                //
+                if (e.next == null)
+                    newTab[e.hash & (newCap - 1)] = e;
+                else if (e instanceof TreeNode)
+                    ((TreeNode<K,V>)e).split(this, newTab, j, oldCap);
+                else { // preserve order
+                    Node<K,V> loHead = null, loTail = null;
+                    Node<K,V> hiHead = null, hiTail = null;
+                    Node<K,V> next;
+                    do {
+                        next = e.next;
+                        if ((e.hash & oldCap) == 0) {
+                            if (loTail == null)
+                                loHead = e;
+                            else
+                                loTail.next = e;
+                            loTail = e;
+                        }
+                        else {
+                            if (hiTail == null)
+                                hiHead = e;
+                            else
+                                hiTail.next = e;
+                            hiTail = e;
+                        }
+                    } while ((e = next) != null);
+                    if (loTail != null) {
+                        loTail.next = null;
+                        newTab[j] = loHead;
+                    }
+                    if (hiTail != null) {
+                        hiTail.next = null;
+                        newTab[j + oldCap] = hiHead;
+                    }
+                }
+            }
+        }
+    }
+    //返回新数组
+    return newTab;
+}
+```
+
+
+
 
 
 
