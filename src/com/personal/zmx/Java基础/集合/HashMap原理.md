@@ -293,44 +293,66 @@ public V putIfAbsent(K key, V value) {
  */
 final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
                boolean evict) {
-    Node<K,V>[] tab; Node<K,V> p; int n, i;
+    //HashMap数组
+    Node<K,V>[] tab; 
+    //链表的当前元素
+    Node<K,V> p; 
+    //n——数组长度，i——当前元素的数组索引
+    int n, i;
+    //数组为空或数组长度为0，进行扩容
     if ((tab = table) == null || (n = tab.length) == 0)
         n = (tab = resize()).length;
+    //如果数组的(n-1)&hash位置不存在元素,直接新建一个Node节点并保存数据
     if ((p = tab[i = (n - 1) & hash]) == null)
         tab[i] = newNode(hash, key, value, null);
     else {
-        Node<K,V> e; K k;
+        //新的链表
+        Node<K,V> e; 
+        K k;
+        //链表的第一个元素的key和入参的key相同，把p赋值给e
         if (p.hash == hash &&
             ((k = p.key) == key || (key != null && key.equals(k))))
             e = p;
+        //链表是红黑树，使用红黑树的方式添加新值
         else if (p instanceof TreeNode)
             e = ((TreeNode<K,V>)p).putTreeVal(this, tab, hash, key, value);
+        //单纯hash碰撞
         else {
             for (int binCount = 0; ; ++binCount) {
+                //链表的下一个元素为null，新建一个node节点并挂到当前链表下
                 if ((e = p.next) == null) {
                     p.next = newNode(hash, key, value, null);
+                    //如果当前元素是链表的第8个元素，链表转换成红黑树，并跳出寻循环
                     if (binCount >= TREEIFY_THRESHOLD - 1) // -1 for 1st
                         treeifyBin(tab, hash);
                     break;
                 }
+                //链表的当前元素的key和入参的key相同，结束循环
                 if (e.hash == hash &&
                     ((k = e.key) == key || (key != null && key.equals(k))))
                     break;
+                //以上都不满足，把下一元素作为当前元素继续循环
                 p = e;
             }
         }
+        //e不等于null(存在相同的key)，用新值覆盖旧值，并返回旧值
         if (e != null) { // existing mapping for key
             V oldValue = e.value;
             if (!onlyIfAbsent || oldValue == null)
                 e.value = value;
+            //保留操作，用于扩展
             afterNodeAccess(e);
             return oldValue;
         }
     }
+    //操作次数自增
     ++modCount;
+    //如果put元素后元素的数量大于阈值，扩容
     if (++size > threshold)
         resize();
+    //保留操作，用于扩展
     afterNodeInsertion(evict);
+    //返回null
     return null;
 }
 ```
@@ -414,17 +436,21 @@ final Node<K,V>[] resize() {
             if ((e = oldTab[j]) != null) {
                 //释放旧数组空间
                 oldTab[j] = null;
-                //
+                //当前容器中的元素不是链表，则保持相同的索引或者进行2的幂次偏移
                 if (e.next == null)
                     newTab[e.hash & (newCap - 1)] = e;
+                //当前容器中的元素是红黑树，则进行红黑树拆分
                 else if (e instanceof TreeNode)
                     ((TreeNode<K,V>)e).split(this, newTab, j, oldCap);
+                //当前容器中的元素是链表
                 else { // preserve order
                     Node<K,V> loHead = null, loTail = null;
                     Node<K,V> hiHead = null, hiTail = null;
                     Node<K,V> next;
                     do {
+                        //获取链表的下一元素
                         next = e.next;
+                        //
                         if ((e.hash & oldCap) == 0) {
                             if (loTail == null)
                                 loHead = e;
@@ -457,7 +483,13 @@ final Node<K,V>[] resize() {
 }
 ```
 
+综上，可以对HashMap的扩容原理进行一个小结：
 
+1. HashMap的数组长度大于等于2的30次方之后不进行扩容；
+2. HashMap的最大阈值为Integer最大值，也就是2^31-1；
+3. 正常扩容时，HashMap的数组长度和阈值都扩大2倍；
+4. 当HashMap第一次扩容的时候，数组长度从阈值中取值；
+5. 当HashMap第一次扩容的时候，
 
 
 
