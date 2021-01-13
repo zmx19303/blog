@@ -495,3 +495,75 @@ final Node<K,V>[] resize() {
 
 
 
+
+
+
+
+# HashMap的取值
+
+先看源码：
+
+```java
+/**
+ * Returns the value to which the specified key is mapped,
+ * or {@code null} if this map contains no mapping for the key.
+ * 返回指定键的映射，如果该map不包含该键的映射，则返回null。
+ *
+ * <p>More formally, if this map contains a mapping from a key
+ * {@code k} to a value {@code v} such that {@code (key==null ? k==null :
+ * key.equals(k))}, then this method returns {@code v}; otherwise
+ * it returns {@code null}.  (There can be at most one such mapping.)
+ * 更正式的说，如果这个映射包含从键k到值v的映射，那么(key==null ?k==null:key.equals(k))，那么
+ * 这个方法返回v;否则它返回null。(最多可以有一个这样的映射。)
+ * 
+ * <p>A return value of {@code null} does not <i>necessarily</i>
+ * indicate that the map contains no mapping for the key; it's also
+ * possible that the map explicitly maps the key to {@code null}.
+ * The {@link #containsKey containsKey} operation may be used to
+ * distinguish these two cases.
+ * 返回值null并不一定表示该map不包含该键的映射;map也可能显式地将键映射到{@code null}。
+ * {@link #contains Key containsKey}操作可以用来区分这两种情况。
+ *
+ * @see #put(Object, Object)
+ */
+public V get(Object key) {
+    Node<K,V> e;
+    //如果获取到的node为null，返回null；否则，返回node的value
+    return (e = getNode(hash(key), key)) == null ? null : e.value;
+}
+```
+
+```java
+/**
+ * Implements Map.get and related methods
+ *
+ * @param hash hash for key
+ * @param key the key
+ * @return the node, or null if none
+ */
+final Node<K,V> getNode(int hash, Object key) {
+    Node<K,V>[] tab; Node<K,V> first, e; int n; K k;
+    //数组不为null，数组长度大于0，数组索引位置的链表的第一个元素不为null，否则，返回null
+    if ((tab = table) != null && (n = tab.length) > 0 &&
+        (first = tab[(n - 1) & hash]) != null) {
+        //检查链表的第一个元素的key和指定key是否相等，相等，返回第一个元素；
+        if (first.hash == hash && // always check first node
+            ((k = first.key) == key || (key != null && key.equals(k))))
+            return first;
+        //如果第一个元素的下一个元素不为null
+        if ((e = first.next) != null) {
+            //第一个元素是红黑树Node，使用红黑树的获取方式
+            if (first instanceof TreeNode)
+                return ((TreeNode<K,V>)first).getTreeNode(hash, key);
+            do {
+                //检查当前元素的hash是否相等，如果相等，则直接返回当前元素；否则，循环至当前元素的下一元素为null
+                if (e.hash == hash &&
+                    ((k = e.key) == key || (key != null && key.equals(k))))
+                    return e;
+            } while ((e = e.next) != null);
+        }
+    }
+    return null;
+}
+```
+
