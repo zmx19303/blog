@@ -567,3 +567,89 @@ final Node<K,V> getNode(int hash, Object key) {
 }
 ```
 
+
+
+小结：
+
+1. 根据key的hash值获取数组中的链表；
+2. 通过比较key是否相等，判断是否是相同的key；
+
+# HashMap移除值
+
+先看源码：
+
+```java
+/**
+ * Removes the mapping for the specified key from this map if present.
+ *
+ * @param  key key whose mapping is to be removed from the map
+ * @return the previous value associated with <tt>key</tt>, or
+ *         <tt>null</tt> if there was no mapping for <tt>key</tt>.
+ *         (A <tt>null</tt> return can also indicate that the map
+ *         previously associated <tt>null</tt> with <tt>key</tt>.)
+ */
+public V remove(Object key) {
+    Node<K,V> e;
+    return (e = removeNode(hash(key), key, null, false, true)) == null ?
+        null : e.value;
+}
+```
+
+```java
+/**
+ * Implements Map.remove and related methods
+ *
+ * @param hash hash for key
+ * @param key the key
+ * @param value the value to match if matchValue, else ignored
+ * @param matchValue if true only remove if value is equal
+ * @param movable if false do not move other nodes while removing
+ * @return the node, or null if none
+ */
+final Node<K,V> removeNode(int hash, Object key, Object value,
+                           boolean matchValue, boolean movable) {
+    Node<K,V>[] tab; Node<K,V> p; int n, index;
+    //如果数组为null或者数组长度小于等于0或者指定key计算的hash索引的node为null，返回null
+    if ((tab = table) != null && (n = tab.length) > 0 &&
+        (p = tab[index = (n - 1) & hash]) != null) {
+        Node<K,V> node = null, e; K k; V v;
+        //获取key相同的链表节点
+        if (p.hash == hash &&
+            ((k = p.key) == key || (key != null && key.equals(k))))
+            node = p;
+        else if ((e = p.next) != null) {
+            if (p instanceof TreeNode)
+                node = ((TreeNode<K,V>)p).getTreeNode(hash, key);
+            else {
+                do {
+                    if (e.hash == hash &&
+                        ((k = e.key) == key ||
+                         (key != null && key.equals(k)))) {
+                        node = e;
+                        break;
+                    }
+                    p = e;
+                } while ((e = e.next) != null);
+            }
+        }
+        //获取key相同的元素不为null，如果matchValue为false，需要比较value是否相同
+        if (node != null && (!matchValue || (v = node.value) == value ||
+                             (value != null && value.equals(v)))) {
+            if (node instanceof TreeNode)
+                ((TreeNode<K,V>)node).removeTreeNode(this, tab, movable)
+            //如果符合要求的链表元素是第一个元素，直接把链表的next元素赋值给数组
+            else if (node == p)
+                tab[index] = node.next;
+            //否则，上移下一元素
+            else
+                p.next = node.next;
+            ++modCount;
+            --size;
+            afterNodeRemoval(node);
+            return node;
+        }
+    }
+    return null;
+}
+```
+
